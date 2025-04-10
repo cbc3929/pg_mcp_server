@@ -6,6 +6,9 @@
 
 通用的 Postgres 的 MCP Server Mcp 部分使用了 MCP-GO 来实现 支持 Stdio 和 SSE 传输。
 
+> Postgis 和 PgVector 的描述来自另一个开源项目：https://github.com/stuzero/pg-mcp-server 🙏🙏🙏  
+>  这种提示方式令人耳目一新
+
 > ⚠️ 数据库需要定义角色来防止 SQL 注入 给 schema➡️public Selete 权限防止敏感数据注入  
 > ⚠️ 新建的角色给 schema➡️temp 所有权限来保证数据隔离
 
@@ -30,9 +33,18 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA temp
    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO mcp_user;
 ```
 
-- 插件支持 ✅
+## 插件支持
+
 - PostGis ✅
 - PgVector ✅
 - PgRouting ⭕
 
-##
+## 特点
+
+LLM 本地部署的情况需要合理分配上下文 如果每次调用都读取库增加时间也占用大量 Token，该项目采取的是预处理的方法 本身支持从库中获取表结构 并且以描述的方式来告诉 LLM：  
+ 利用 Tool 的 description 和 input_schema 来隐式或显式地传递 Schema 信息。
+
+## 未完成
+
+- 对于 Temp 架构下的表的梳理 应该有 监测机制来 对表进行回收
+- 单元测试问题
