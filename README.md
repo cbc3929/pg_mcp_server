@@ -46,6 +46,51 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA temp
    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO mcp_user;
 ```
 
+## 运行
+
+- 🐋Docker 运行
+
+```shell
+git clone https://github.com/cbc3929/pg_mcp_server.git
+cd pg_mcp_server
+docker build -t pg-mcp-server:latest .
+docker run -d -p 8181:8181 --name my-mcp-server pg-mcp-server:latest
+```
+
+- 🀄 直接运行
+
+1. 克隆项目
+
+```shell
+git clone https://github.com/cbc3929/pg_mcp_server.git
+cd pg_mcp_server
+```
+
+2. 安装依赖
+
+```bash
+go mod tidy
+```
+
+或者
+
+```bash
+go mod download
+```
+
+3. 直接运行
+
+```bash
+go run main.go
+```
+
+4. 打包(可选)
+
+```bash
+go build
+./pg_mcp_server
+```
+
 ## 插件支持
 
 - PostGis ✅
@@ -54,11 +99,15 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA temp
 
 ## 特点
 
-LLM 本地部署的情况需要合理分配上下文 如果每次调用都读取库增加时间也占用大量 Token，该项目采取的是预处理的方法 本身支持从库中获取表结构 并且以描述的方式来告诉 LLM：  
- 利用 Tool 的 description 和 input_schema 来隐式或显式地传递 Schema 信息。
+LLM 本地部署的情况需要合理分配上下文 如果每次调用都读取库增加时间也占用大量 Token，该项目采取的是预处理的方法 本身支持从库中获取表结构 并且以描述的方式来告诉 LLM：
+利用 Tool 的 description 和 input_schema 来隐式或显式地传递 Schema 信息。
 利用 MCP 中的 Resource 在初始化的时候就读取了 表包含名字 列 约束 外键 索引 Geom 的类型和 EPSG 为大模型深入理解创造了基本的条件
 
 ## 未完成
 
 - 对于 Temp 架构下的表的梳理 应该有 监测机制来 对表进行回收
 - 单元测试问题
+
+```
+
+```
