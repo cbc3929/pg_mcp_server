@@ -1,10 +1,10 @@
 # <center>PG_MCP_SERVER</center>
 
-<center>自己实现的对于 PostGresQL 的支持</center>
+<center>自己实现的对于 PostGreSQL+PostGIS 的支持</center>
 
 ## 介绍
 
-通用的 Postgres 的 MCP Server Mcp 部分使用了 MCP-GO 来实现 支持 Stdio 和 SSE 传输。
+通用的 Postgres 的 MCP Server Mcp 部分使用了 [go-mcp](https://github.com/ThinkInAIXYZ/go-mcp) 来实现 支持 Stdio 和 SSE 传输。
 
 > Postgis 和 PgVector 的描述来自另一个开源项目：https://github.com/stuzero/pg-mcp-server 🙏🙏🙏  
 >  这种提示方式令人耳目一新
