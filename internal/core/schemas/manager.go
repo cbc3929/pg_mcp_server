@@ -188,6 +188,7 @@ func (m *manager) fetchSchemas(ctx context.Context, connID string) ([]map[string
             schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
             AND schema_name NOT LIKE 'pg\_%' ESCAPE '\' -- 正确转义下划线
             AND schema_name NOT LIKE 'temp%' -- 排除我们自己的临时 schema
+						AND schema_name NOT LIKE 'topolo%' -- 排除postgis的 schema
         ORDER BY schema_name
     `
 	return m.dbService.ExecuteQuery(ctx, connID, true, query) // 只读查询
@@ -206,6 +207,7 @@ func (m *manager) fetchTables(ctx context.Context, connID, schemaName string) ([
             t.table_schema = $1
             AND t.table_type = 'BASE TABLE'
             AND c.relkind = 'r' -- 确保是普通表 ('r')
+						AND t.table_name NOT LIKE 'spatia%' -- Postgis 的空间坐标系的表排除
         ORDER BY t.table_name
     `
 	return m.dbService.ExecuteQuery(ctx, connID, true, query, schemaName)
@@ -216,18 +218,24 @@ func (m *manager) fetchColumns(ctx context.Context, connID, schemaName, tableNam
 	queryColumns := `
         SELECT
             c.column_name,
-            c.data_type,
+            format_type(a.atttypid, a.atttypmod) AS formatted_type, -- 获取完整格式化类型
             c.is_nullable,
             c.column_default,
             col_description(cls.oid, c.ordinal_position) as description
-        FROM information_schema.columns c
+            -- 也可以选择性地保留 c.data_type, c.udt_name 用于调试
+            -- c.data_type,
+            -- c.udt_name
+        FROM information_schema.columns c -- 主要用于获取列顺序和基本信息
         JOIN pg_namespace ns ON c.table_schema = ns.nspname
         JOIN pg_class cls ON c.table_name = cls.relname AND ns.oid = cls.relnamespace
+        JOIN pg_attribute a ON a.attrelid = cls.oid AND a.attname = c.column_name -- 关联 pg_attribute 获取类型 OID 和修饰符
         WHERE
             c.table_schema = $1 AND
             c.table_name = $2
             AND cls.relkind = 'r'
-        ORDER BY c.ordinal_position
+            AND a.attnum > 0 -- 排除系统列
+            AND NOT a.attisdropped -- 排除已删除的列
+        ORDER BY c.ordinal_position -- 保持 information_schema 的顺序
     `
 	rows, err := m.dbService.ExecuteQuery(ctx, connID, true, queryColumns, schemaName, tableName)
 	if err != nil {
@@ -247,7 +255,7 @@ func (m *manager) fetchColumns(ctx context.Context, connID, schemaName, tableNam
 		colName := row["column_name"].(string)
 		col := ColumnInfo{
 			Name:         colName,
-			Type:         row["data_type"].(string),
+			Type:         dbString(row["formatted_type"]),
 			IsNullable:   row["is_nullable"].(string) == "YES",
 			DefaultValue: dbStringPtr(row["column_default"]), // 处理可能的 NULL 默认值
 			Description:  dbString(row["description"]),
@@ -278,43 +286,44 @@ func (m *manager) fetchColumns(ctx context.Context, connID, schemaName, tableNam
 func (m *manager) fetchIndexes(ctx context.Context, connID, schemaName, tableName string) ([]IndexInfo, error) {
 	query := `
         SELECT
-            i.relname as index_name,
-            am.amname as index_type,
-            ix.indisunique as is_unique,
-            ix.indisprimary as is_primary,
-            obj_description(i.oid, 'pg_class') as description,
-            pg_get_indexdef(i.oid) as index_definition, -- 获取完整定义
-             -- 获取索引列名，处理表达式索引
-            array_agg(
-                CASE
-                    WHEN k.attnum > 0 THEN a.attname -- 普通列
-                    ELSE pg_get_indexdef(i.oid, k.i::int, false) -- 表达式
-                END
-                ORDER BY k.i
-            ) as column_names
-        FROM
-            pg_index ix
-        JOIN
-            pg_class i ON i.oid = ix.indexrelid
-        JOIN
-            pg_class t ON t.oid = ix.indrelid
-        JOIN
-            pg_namespace n ON n.oid = t.relnamespace
-        JOIN
-            pg_am am ON i.relam = am.oid
-        LEFT JOIN
-            -- 使用 generate_subscripts 替代 unnest + WITH ORDINALITY 以处理表达式索引 (indkey 中可能为 0)
-            generate_subscripts(ix.indkey, 1) WITH ORDINALITY AS k(attpos, i) ON TRUE
-        LEFT JOIN
-            pg_attribute a ON a.attrelid = t.oid AND a.attnum = ix.indkey[k.attpos] -- k.attnum 改为 ix.indkey[k.attpos]
-        WHERE
-            n.nspname = $1
-            AND t.relname = $2
-            AND ix.indislive -- 只选择有效的索引
-        GROUP BY
-            i.relname, i.oid, am.amname, ix.indisunique, ix.indisprimary
-        ORDER BY
-            i.relname
+						i.relname as index_name,
+						am.amname as index_type,
+						ix.indisunique as is_unique,
+						ix.indisprimary as is_primary,
+						obj_description(i.oid, 'pg_class') as description,
+						pg_get_indexdef(i.oid) as index_definition, -- 获取完整定义
+						-- 获取索引列名，处理表达式索引
+						array_agg(
+								CASE
+										WHEN ix.indkey[k.attpos] > 0 THEN a.attname -- 普通列 (使用 ix.indkey[k.attpos] 获取 attnum)
+										ELSE pg_get_indexdef(i.oid, k.i::int, false) -- 表达式 (k.i 是行号/列位置)
+								END
+								ORDER BY k.i -- 按索引中的列顺序排序
+						) as column_names
+				FROM
+						pg_index ix
+				JOIN
+						pg_class i ON i.oid = ix.indexrelid
+				JOIN
+						pg_class t ON t.oid = ix.indrelid
+				JOIN
+						pg_namespace n ON n.oid = t.relnamespace
+				JOIN
+						pg_am am ON i.relam = am.oid
+				LEFT JOIN
+						-- k.attpos 是 indkey 的下标 (从 1 开始), k.i 是 generate_subscripts 的行号 (也是从 1 开始)
+						generate_subscripts(ix.indkey, 1) WITH ORDINALITY AS k(attpos, i) ON TRUE
+				LEFT JOIN
+						-- 使用正确的 attnum (ix.indkey[k.attpos]) 来关联 pg_attribute
+						pg_attribute a ON a.attrelid = t.oid AND a.attnum = ix.indkey[k.attpos] -- 使用 ix.indkey[k.attpos]
+				WHERE
+						n.nspname = $1
+						AND t.relname = $2
+						AND ix.indislive -- 只选择有效的索引
+				GROUP BY
+						i.relname, i.oid, am.amname, ix.indisunique, ix.indisprimary
+				ORDER BY
+						i.relname;
     `
 	rows, err := m.dbService.ExecuteQuery(ctx, connID, true, query, schemaName, tableName)
 	if err != nil {
