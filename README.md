@@ -72,7 +72,6 @@ git clone https://github.com/cbc3929/pg_mcp_server.git
 cd pg_mcp_server
 docker build -t pg-mcp-server:latest .
 docker run -d -p 8181:8181 --name my-mcp-server pg-mcp-server:latest
-Use code with caution.
 ```
 
 - 🀄 Run Directly
@@ -88,7 +87,6 @@ cd pg_mcp_server
 
 ```bash
 go mod tidy
-Use code with caution.
 ```
 
 or
