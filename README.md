@@ -1,111 +1,123 @@
-# <center>PG_MCP_SERVER</center>
+# PG_MCP_SERVER
 
-<center>自己实现的对于 PostGreSQL+PostGIS 的支持</center>
+<div align="center">Custom Implementation for PostgreSQL + PostGIS Support</div>
 
-## 介绍
+## Introduction
 
-通用的 Postgres 的 MCP Server Mcp 部分使用了 [go-mcp](https://github.com/ThinkInAIXYZ/go-mcp) 来实现 支持 Stdio 和 SSE 传输。
+[中文文档](./MD/README_ZH.md)
 
-> Postgis 和 PgVector 的描述来自另一个开源项目：https://github.com/stuzero/pg-mcp-server 🙏🙏🙏  
->  这种提示方式令人耳目一新
+A general-purpose PostgreSQL MCP Server. The MCP part is implemented using [go-mcp](https://github.com/ThinkInAIXYZ/go-mcp), supporting Stdio and SSE transports.
 
-> ⚠️ 数据库需要定义角色来防止 SQL 注入 给 schema➡️public Selete 权限防止敏感数据注入  
-> ⚠️ 新建的角色给 schema➡️temp 所有权限来保证数据隔离
+> The descriptions for PostGIS and PgVector come from another open-source project: https://github.com/stuzero/pg-mcp-server 🙏🙏🙏
+> This approach to providing context is refreshing.
 
-## 特点
+> ⚠️ Database requires defining roles to prevent SQL injection. Grant `SELECT` permission to the `public` schema to prevent sensitive data exposure.
+> ⚠️ Grant all permissions to the new role for the `temp` schema to ensure data isolation.
 
-LLM 本地部署的情况需要合理分配上下文 如果每次调用都读取库增加时间也占用大量 Token，该项目采取的是预处理的方法 本身支持从库中获取表结构 并且以描述的方式来告诉 LLM：
-利用 Tool 的 description 和 input_schema 来隐式或显式地传递 Schema 信息。
-利用 MCP 中的 Resource 在初始化的时候就读取了 表包含名字 列 约束 外键 索引 Geom 的类型和 EPSG 为大模型深入理解创造了基本的条件## 使用
+## Features
 
-在 `main.go` 中
+When deploying LLMs locally, context needs to be managed efficiently. Reading the database schema on every call consumes time and significant token context. This project adopts a pre-processing approach. It natively supports fetching the table structure from the database and provides descriptive information to the LLM:
+
+- Utilizes Tool descriptions and input schemas to implicitly or explicitly convey schema information.
+- Leverages MCP Resources during initialization to read table names, columns, constraints, foreign keys, indexes, geometry types, and EPSG codes, creating a fundamental understanding for the large model.
+
+## Installation
+
+In `main.go`:
 
 ```go
+// Here you can set the connection string for database interaction
 schemaLoadConnID, err := dbService.RegisterConnection(tempCtx, "postgres://mcp_user:mcp123456@192.168.2.19:5432/postgres")
 ```
 
-这里可以设置和数据库的交互当然也可以更改为.env 中设置 只需打开`.env` 注释 `SCHEMA_LOAD_DB_URL`
-
-这里的给服务器一个初始的连接`string`来缓存数据库表的信息  
-这里推荐新建一个服务器角色 `sql`如下：
+The format is `postgres://user:pass@host:port/db`  
+Alternatively, you can configure it via .env by uncommenting and setting the `SCHEMA_LOAD_DB_URL` variable.
+Here, RegisterConnection gives the server an initial connection string to cache database table information.  
+🏁 It is recommended to create a dedicated server role. The SQL is as follows:
 
 ```sql
--- 新建一个角色 设置密码
+-- Create a new role and set a password
 CREATE ROLE mcp_user WITH LOGIN PASSWORD 'mcp123456';
--- 设置mcp_server的基本权限
+
+-- Set basic permissions for mcp_user
 GRANT CONNECT ON DATABASE postgres TO mcp_user;
 GRANT USAGE ON SCHEMA public TO mcp_user;
--- 设置 public 架构下所有表的selete权限
+
+-- Grant SELECT permission on all existing tables in the public schema
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO mcp_user;
--- 使未来在 public schema 中创建的表的 SELECT 权限自动授予 mcp_user
+
+-- Automatically grant SELECT on future tables in public schema to mcp_user
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
    GRANT SELECT ON TABLES TO mcp_user;
--- 新建一个 temp 的 schema
+
+-- Create a temp schema
 CREATE SCHEMA temp;
--- 给mcp_user用户 所有的 temp 架构下的权限
+
+-- Grant all privileges on the temp schema to mcp_user
 GRANT USAGE, CREATE ON SCHEMA temp TO mcp_user;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA temp TO mcp_user;
--- 同样的 未来所有的 schema 的权限都赋予给mcp_user
+
+-- Grant all privileges on future tables in temp schema to mcp_user
 ALTER DEFAULT PRIVILEGES IN SCHEMA temp
    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO mcp_user;
+Use code with caution.
 ```
 
-## 运行
+## Running
 
-- 🐋Docker 运行
+- 🐋 Run with Docker
 
-```shell
+```bash
 git clone https://github.com/cbc3929/pg_mcp_server.git
 cd pg_mcp_server
 docker build -t pg-mcp-server:latest .
 docker run -d -p 8181:8181 --name my-mcp-server pg-mcp-server:latest
+Use code with caution.
 ```
 
-- 🀄 直接运行
+- 🀄 Run Directly
 
-1. 克隆项目
+1. Clone the project
 
-```shell
+```
 git clone https://github.com/cbc3929/pg_mcp_server.git
 cd pg_mcp_server
 ```
 
-2. 安装依赖
+2. Install dependencies
 
 ```bash
 go mod tidy
+Use code with caution.
 ```
 
-或者
+or
 
 ```bash
 go mod download
 ```
 
-3. 直接运行
+3. Run directly  
+   Ensure necessary environment variables are set or .env file is present
 
-```bash
-go run main.go
+```
+go run ./cmd/server/main.go
 ```
 
-4. 打包(可选)
+4. Build (Optional)
 
-```bash
-go build
+```
+go build -o pg_mcp_server ./cmd/server/main.go
 ./pg_mcp_server
 ```
 
-## 插件支持
+## Extension Support
 
-- PostGis ✅
-- PgVector ✅
-- PgRouting ⭕
+PostGIS ✅  
+PgVector ✅  
+PgRouting ⭕
 
-## 未完成
+## TODO / Unfinished
 
-- 对于 Temp 架构下的表的梳理 应该有 监测机制来 对表进行回收
-- 单元测试问题
-
-```
-
-```
+- Management of tables in the temp schema: A mechanism for table cleanup/recycling should be implemented.
+- Unit testing.
