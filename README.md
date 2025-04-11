@@ -12,6 +12,19 @@
 > ⚠️ 数据库需要定义角色来防止 SQL 注入 给 schema➡️public Selete 权限防止敏感数据注入  
 > ⚠️ 新建的角色给 schema➡️temp 所有权限来保证数据隔离
 
+## 使用
+
+在 `main.go` 中
+
+```go
+schemaLoadConnID, err := dbService.RegisterConnection(tempCtx, "postgres://mcp_user:mcp123456@192.168.2.19:5432/postgres")
+```
+
+这里可以设置和数据库的交互当然也可以更改为.env 中设置 只需打开`.env` 注释 `SCHEMA_LOAD_DB_URL`
+
+这里的给服务器一个初始的连接`string`来缓存数据库表的信息  
+这里推荐新建一个服务器角色 `sql`如下：
+
 ```sql
 -- 新建一个角色 设置密码
 CREATE ROLE mcp_user WITH LOGIN PASSWORD 'mcp123456';
