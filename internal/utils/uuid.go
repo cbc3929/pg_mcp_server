@@ -2,9 +2,10 @@ package utils
 
 import (
 	"fmt"
-	"github.com/google/uuid"
 	"net/url"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 // postgresqlNamespace 是一个用于 PostgreSQL 连接的自定义 UUID 命名空间。
@@ -45,4 +46,8 @@ func ConnectionStringToUUID(connectionString string) (string, error) {
 	// 使用自定义命名空间生成版本 5 UUID (基于 SHA-1)
 	resultUUID := uuid.NewSHA1(postgresqlNamespace, []byte(canonicalString))
 	return resultUUID.String(), nil
+}
+
+func GenerateUUID() string {
+	return uuid.New().String()
 }

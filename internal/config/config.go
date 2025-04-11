@@ -12,6 +12,7 @@ import (
 
 // Config 结构体定义了应用的所有配置项
 type Config struct {
+	IsDebug       bool   // 是否是debug模式
 	ServerAddr    string // MCP 服务器监听地址 (例如: ":8181")
 	LogLevel      string // 日志级别 (例如: "debug", "info", "warn", "error")
 	ExtensionsDir string // 存放扩展知识 YAML 文件的目录路径
@@ -20,8 +21,7 @@ type Config struct {
 	DBConnMaxIdleTime time.Duration // 连接池中连接的最大空闲时间
 	DBMaxOpenConns    int           // 连接池最大打开连接数
 	DBMinOpenConns    int           // 连接池最小空闲连接数
-	// SchemaLoadDBURL string        // (可选) 如果需要一个固定的连接串在启动时加载Schema
-	// 这个可以考虑去掉，让 SchemaManager 在需要时向 DatabaseService 注册一个临时的
+
 }
 
 // LoadConfig 加载配置信息
@@ -37,6 +37,7 @@ func LoadConfig() *Config {
 	cfg := &Config{
 		// 设置默认值
 		ServerAddr:        getEnv("MCP_SERVER_ADDR", ":8181"),
+		IsDebug:           getEnvBool("IsDebug", true),
 		LogLevel:          getEnv("LOG_LEVEL", "info"),
 		ExtensionsDir:     getEnv("EXTENSIONS_DIR", "./extensions_knowledge"), // 默认在项目根目录下的 extensions_knowledge
 		DBConnMaxLifetime: getEnvDuration("DB_CONN_MAX_LIFETIME", 1*time.Hour),
@@ -107,4 +108,12 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 		return defaultValue
 	}
 	return value
+}
+func getEnvBool(key string, defaultValue bool) bool {
+	if valueStr, exists := os.LookupEnv(key); exists {
+		if value, err := strconv.ParseBool(valueStr); err == nil {
+			return value
+		}
+	}
+	return defaultValue
 }
