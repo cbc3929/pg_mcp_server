@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"net" // 用于构建监听地址
 
 	// 引入日志
 
@@ -38,29 +37,18 @@ func NewMCPServer(
 ) (*MCPServer, error) {
 	utils.DefaultLogger.Info("正在创建 MCP 服务器实例...")
 
-	// 1. 创建传输层 (这里使用 SSE 作为示例)
-	//    地址从配置中读取
-	listener, err := net.Listen("tcp", cfg.ServerAddr)
-	if err != nil {
-		utils.DefaultLogger.Fatal("创建网络监听失败", zap.String("address", cfg.ServerAddr), zap.Error(err))
-		return nil, fmt.Errorf("创建网络监听失败: %w", err)
-	}
-	utils.DefaultLogger.Info("网络监听器已创建", zap.String("address", listener.Addr().String()))
-
 	// 注意：这里假设 transport.NewSSEServerTransport 接受 net.Listener
 	// 如果它只接受地址字符串，则直接传入 cfg.ServerAddr
 	// 需要根据 go-mcp 的实际 API 调整
 	// 假设它接受 Listener:
 	transportLayer, err := transport.NewSSEServerTransport(cfg.ServerAddr)
-	// 或者，如果它接受地址字符串:
-	// transportLayer, err := transport.NewSSEServerTransport(cfg.ServerAddr)
-
 	if err != nil {
 		utils.DefaultLogger.Fatal("创建 SSE 传输层失败", zap.String("address", cfg.ServerAddr), zap.Error(err))
-		_ = listener.Close() // 关闭已创建的 listener
 		return nil, fmt.Errorf("创建 SSE 传输层失败: %w", err)
 	}
-	utils.DefaultLogger.Info("SSE 传输层已创建")
+	utils.DefaultLogger.Info("SSE 传输层已创建", zap.String("configuredAddress", cfg.ServerAddr))
+	// 或者，如果它接受地址字符串:
+	// transportLayer, err := transport.NewSSEServerTransport(cfg.ServerAddr)
 
 	// 2. 创建 MCP 服务器实例
 	//    可以传递服务器信息等选项
@@ -73,7 +61,6 @@ func NewMCPServer(
 	)
 	if err != nil {
 		utils.DefaultLogger.Fatal("创建 MCP 服务器失败", zap.Error(err))
-		_ = listener.Close() // 关闭 listener
 		return nil, fmt.Errorf("创建 MCP 服务器失败: %w", err)
 	}
 	utils.DefaultLogger.Info("MCP 服务器核心实例已创建")
@@ -82,7 +69,6 @@ func NewMCPServer(
 	//    将核心服务和管理器传递给注册函数
 	if err := handlers.RegisterHandlers(mcpServerInstance, dbService, schemaManager, extManager); err != nil {
 		utils.DefaultLogger.Fatal("注册 MCP Handlers 失败", zap.Error(err))
-		_ = listener.Close() // 关闭 listener
 		return nil, fmt.Errorf("注册 MCP Handlers 失败: %w", err)
 	}
 
