@@ -12,7 +12,11 @@
 > ⚠️ 数据库需要定义角色来防止 SQL 注入 给 schema➡️public Selete 权限防止敏感数据注入  
 > ⚠️ 新建的角色给 schema➡️temp 所有权限来保证数据隔离
 
-## 使用
+## 特点
+
+LLM 本地部署的情况需要合理分配上下文 如果每次调用都读取库增加时间也占用大量 Token，该项目采取的是预处理的方法 本身支持从库中获取表结构 并且以描述的方式来告诉 LLM：
+利用 Tool 的 description 和 input_schema 来隐式或显式地传递 Schema 信息。
+利用 MCP 中的 Resource 在初始化的时候就读取了 表包含名字 列 约束 外键 索引 Geom 的类型和 EPSG 为大模型深入理解创造了基本的条件## 使用
 
 在 `main.go` 中
 
@@ -96,12 +100,6 @@ go build
 - PostGis ✅
 - PgVector ✅
 - PgRouting ⭕
-
-## 特点
-
-LLM 本地部署的情况需要合理分配上下文 如果每次调用都读取库增加时间也占用大量 Token，该项目采取的是预处理的方法 本身支持从库中获取表结构 并且以描述的方式来告诉 LLM：
-利用 Tool 的 description 和 input_schema 来隐式或显式地传递 Schema 信息。
-利用 MCP 中的 Resource 在初始化的时候就读取了 表包含名字 列 约束 外键 索引 Geom 的类型和 EPSG 为大模型深入理解创造了基本的条件
 
 ## 未完成
 
