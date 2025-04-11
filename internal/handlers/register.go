@@ -89,11 +89,37 @@ func RegisterHandlers(mcpServer *server.Server, dbService databases.Service, sch
 	})
 	utils.DefaultLogger.Info("Tool 'disconnect' 已注册")
 
-	pgQueryTool, err := protocol.NewTool("pg_query", "执行只读 SQL 查询", PgQueryToolArgs{})
-	if err != nil {
-		return fmt.Errorf("创建 'pg_query' 工具定义失败: %w", err)
+	pgQueryToolManual := &protocol.Tool{
+		Name:        "pg_query",
+		Description: "对指定的数据库连接执行一个只读的 SQL 查询",
+		InputSchema: protocol.InputSchema{
+			Type: protocol.Object, // 使用 Object 常量
+			Properties: map[string]*protocol.Property{
+				"conn_id": {
+					Type:        protocol.String, // 直接使用常量
+					Description: "目标数据库的连接 ID",
+				},
+				"query": {
+					Type:        protocol.String,
+					Description: "要执行的 SQL 查询语句 (应使用 $1, $2... 作为参数占位符)",
+				},
+				"params": {
+					Type:        protocol.Array, // 类型是数组
+					Description: "(可选) 查询语句对应的参数列表 (可以是字符串, 数字, 布尔等)",
+					Items: &protocol.Property{
+						// 将 Items 的 Type 设置为 String 作为一种妥协。
+						// 因为库不支持 "any"，定义为 String 至少能通过 Schema 定义阶段。
+						// Handler 中的 JsonUnmarshal 仍能将 JSON 数组解析到 []any。
+						// 数据库驱动 pgx 通常也能处理 []any 中的不同类型。
+						Type:        protocol.String,
+						Description: "数组中的单个参数 (Schema 定义为 string，但接受任意 JSON 类型)",
+					},
+				},
+			},
+			Required: []string{"conn_id", "query"},
+		},
 	}
-	mcpServer.RegisterTool(pgQueryTool, func(request *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
+	mcpServer.RegisterTool(pgQueryToolManual, func(request *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		args := new(PgQueryToolArgs)
@@ -115,11 +141,20 @@ func RegisterHandlers(mcpServer *server.Server, dbService databases.Service, sch
 	})
 	utils.DefaultLogger.Info("Tool 'pg_query' 已注册")
 
-	pgExplainTool, err := protocol.NewTool("pg_explain", "获取 SQL 执行计划", PgQueryToolArgs{})
-	if err != nil {
-		return fmt.Errorf("创建 'pg_explain' 工具定义失败: %w", err)
+	pgExplainToolManual := &protocol.Tool{
+		Name:        "pg_explain",
+		Description: "获取指定 SQL 查询的 PostgreSQL 执行计划 (EXPLAIN FORMAT JSON)",
+		InputSchema: protocol.InputSchema{
+			Type: protocol.Object,
+			Properties: map[string]*protocol.Property{
+				"conn_id": {Type: protocol.String, Description: "目标数据库的连接 ID"},
+				"query":   {Type: protocol.String, Description: "要分析的 SQL 查询语句"},
+				"params":  {Type: protocol.Array, Description: "(可选) 查询参数列表", Items: &protocol.Property{Type: protocol.String}}, // Items 定义为 String
+			},
+			Required: []string{"conn_id", "query"},
+		},
 	}
-	mcpServer.RegisterTool(pgExplainTool, func(request *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
+	mcpServer.RegisterTool(pgExplainToolManual, func(request *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		args := new(PgQueryToolArgs)
