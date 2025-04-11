@@ -18,11 +18,9 @@ import (
 )
 
 func main() {
+	utils.SetupLogger(true)
 	// 1. 加载配置
 	cfg := config.LoadConfig()
-
-	// 2. 初始化日志 (根据配置)
-	utils.SetupLogger(cfg.IsDebug)
 
 	defer func() { _ = utils.DefaultLogger.Sync() }() // 程序退出前同步日志
 
@@ -55,7 +53,7 @@ func main() {
 	utils.DefaultLogger.Info("临时获取 Schema 加载连接 ID", zap.String("connID", schemaLoadConnID))
 
 	// --- 加载 Schema 和扩展知识 ---
-	loadCtx, loadCancel := context.WithTimeout(context.Background(), 60*time.Second) // 60秒加载超时
+	loadCtx, loadCancel := context.WithTimeout(context.Background(), 5*time.Minute) // 5分加载超时
 	if err := schemaManager.LoadSchema(loadCtx, schemaLoadConnID); err != nil {
 		utils.DefaultLogger.Fatal("加载数据库 Schema 失败", zap.Error(err))
 		loadCancel()
